@@ -43,11 +43,12 @@ Projektet kräver ESP-IDF 6.0.1 eller senare (`release/v6.1` rekommenderas).
 ESP-IDF 5.x fungerar inte.
 
 ```bash
-python scripts/build.py folotoy/ai-passport --name ai-passport
+python scripts/build.py folotoy/ai-passport --name ai-passport --language sv-SE
 ```
 
-Svenska är förvalt för kortet. Med en fork på GitHub bygger Actions samma sak vid push
-till `main` eller `ci/*`, och firmwaren hamnar som artefakt på körningen.
+Med en fork på GitHub bygger Actions kortet vid push till `main` eller `ci/*` när en
+fil i kortets mapp ändrats, och firmwaren hamnar som artefakt på körningen. Den byggs
+med engelska systemtexter. Övervakningssidan är svensk i båda fallen.
 
 Inställningar finns under **Xiaozhi Assistant → SolisCloud Monitor** i
 `idf.py menuconfig`. Nycklar läggs aldrig där, eftersom de då hamnar i firmwaren.
