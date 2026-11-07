@@ -6,10 +6,17 @@
 #include "config.h"
 #include "assets/lang_config.h"
 #include "cw2017_battery_monitor.h"
+#include "mcp_server.h"
 #include "power_save_timer.h"
+#include "solis_monitor.h"
+#include "solis_page.h"
+#include "solis_setup_server.h"
 
 #include <atomic>
+#include <cstdio>
+#include <string>
 
+#include <cJSON.h>
 #include <esp_log.h>
 #include <esp_lcd_panel_vendor.h>
 #include <esp_lcd_panel_ops.h>
@@ -267,6 +274,11 @@ private:
     // does; the generation check in each transition is what drops them, and this
     // deadline is the second line of defence for the same window.
     int64_t last_key_us_ = 0;
+    SolisMonitor solis_monitor_;
+    SolisPage* solis_page_ = nullptr;
+    SolisSetupServer* solis_setup_ = nullptr;
+    // OK long press flips this; the page also yields to any non-idle state.
+    std::atomic<bool> solis_page_wanted_{true};
 
     // Guards the stage transitions against a key press that arrived while they
     // were queued: the re-arm has already forgiven that press, but the wake
@@ -474,6 +486,11 @@ private:
             });
         });
 
+        ok->OnLongPress([this]() {
+            if (KeyEventsBlocked()) return;
+            solis_page_wanted_ = !solis_page_wanted_;
+        });
+
         // Cancel the idle countdown on press-down rather than on click, so a key
         // held for a long press also wakes the screen and the CPU immediately.
         // Press-down itself is never blocked: it is what wakes the device.
@@ -624,6 +641,16 @@ private:
                  kSoftSleepSeconds, kDeepSleepSeconds);
     }
 
+    // Checked on every idle tick rather than when the stages are armed, so a key
+    // entered on the setup page takes effect within the running idle cycle.
+    bool KeepAwakeForSolis() const {
+#if CONFIG_SOLIS_MONITOR_KEEP_AWAKE
+        return solis_monitor_.IsConfigured();
+#else
+        return false;
+#endif
+    }
+
     bool StageRequestStillCurrent(uint32_t generation) const {
         return generation == idle_generation_.load(std::memory_order_relaxed);
     }
@@ -633,7 +660,7 @@ private:
     // main task, which is where the application state is readable and where the
     // panel, codec and PM may be touched.
     void OnIdleSecond() {
-        if (deep_sleep_started_) {
+        if (deep_sleep_started_ || KeepAwakeForSolis()) {
             return;
         }
         const uint32_t generation = idle_generation_.load(std::memory_order_relaxed);
@@ -1108,6 +1135,126 @@ private:
         ESP_LOGI(TAG, "Panel asleep, LCD pin levels held through deep sleep");
     }
 
+    void OnSolisTick(const SolisStatus& status) {
+        // Only while there is no key: the page can store one, so it must not
+        // stay reachable on the network once the board is in use.
+        const bool wifi_up = WifiManager::GetInstance().IsConnected();
+        if (!solis_monitor_.IsConfigured() && wifi_up) {
+            solis_setup_->Start();
+        } else {
+            solis_setup_->Stop();
+        }
+
+        std::string setup_url;
+        if (solis_setup_->IsRunning()) {
+            setup_url = "http://" + WifiManager::GetInstance().GetIpAddress();
+        }
+        const bool visible = solis_page_wanted_ && !soft_sleep_active_ &&
+                             Application::GetInstance().GetDeviceState() == kDeviceStateIdle;
+        solis_page_->Apply(visible, status, setup_url);
+    }
+
+    void OnSolisAlarm() {
+        Application::GetInstance().Schedule([this]() {
+            auto& app = Application::GetInstance();
+            GetDisplay()->ShowNotification("Solis larm", 10000);
+            // In soft sleep the codec is suspended; the page shows it on wake.
+            if (!soft_sleep_active_ && app.GetDeviceState() == kDeviceStateIdle) {
+                app.GetAudioService().PlaySound(Lang::Sounds::OGG_EXCLAMATION);
+            }
+        });
+    }
+
+    static const char* SolisHealthName(SolisHealth health) {
+        switch (health) {
+            case SolisHealth::kNoKey:
+                return "no_api_key";
+            case SolisHealth::kWaiting:
+                return "fetching";
+            case SolisHealth::kOk:
+                return "ok";
+            case SolisHealth::kRejected:
+                return "api_key_rejected";
+            case SolisHealth::kNoPlant:
+                return "no_plant_on_account";
+            case SolisHealth::kUnreachable:
+                return "soliscloud_unreachable";
+        }
+        return "unknown";
+    }
+
+    static const char* SolisPlantStateName(soliscloud::PlantState state) {
+        switch (state) {
+            case soliscloud::PlantState::kOnline:
+                return "online";
+            case soliscloud::PlantState::kOffline:
+                return "offline";
+            case soliscloud::PlantState::kAlarm:
+                return "alarm";
+            case soliscloud::PlantState::kUnknown:
+                break;
+        }
+        return "unknown";
+    }
+
+    cJSON* SolisStatusToJson() const {
+        const SolisStatus status = solis_monitor_.GetStatus();
+        cJSON* json = cJSON_CreateObject();
+        cJSON_AddStringToObject(json, "connection", SolisHealthName(status.health));
+        if (!status.has_reading) {
+            return json;
+        }
+
+        const auto& r = status.reading;
+        cJSON_AddStringToObject(json, "plant_state", SolisPlantStateName(r.state));
+        cJSON_AddNumberToObject(json, "data_age_seconds", status.data_age_seconds);
+        cJSON_AddNumberToObject(json, "solar_power_w", r.pv_watts);
+        cJSON_AddNumberToObject(json, "solar_today_kwh", r.pv_today_wh / 1000.0);
+        if (r.has_load) {
+            cJSON_AddNumberToObject(json, "house_load_w", r.load_watts);
+        }
+        if (r.has_grid) {
+            cJSON_AddNumberToObject(json, "grid_selling_w_negative_is_buying", r.grid_watts);
+            cJSON_AddNumberToObject(json, "bought_today_kwh", r.bought_today_wh / 1000.0);
+            cJSON_AddNumberToObject(json, "sold_today_kwh", r.sold_today_wh / 1000.0);
+        }
+        if (r.has_battery) {
+            cJSON_AddNumberToObject(json, "battery_percent", r.soc_percent);
+            cJSON_AddNumberToObject(json, "battery_charging_w_negative_is_discharging",
+                                    r.battery_watts);
+        }
+        return json;
+    }
+
+    void InitializeSolisMonitor() {
+        auto& mcp_server = McpServer::GetInstance();
+        mcp_server.AddTool(
+            "self.solis.get_status",
+            "Reads the home's solar plant from SolisCloud: solar production, house load, battery, "
+            "grid purchase and sale, today's energy and whether the plant is online or in alarm. "
+            "Use it for every question about the solar panels, the inverter, the home battery or "
+            "the electricity the home produces, buys or sells. SolisCloud refreshes about every "
+            "five minutes; `data_age_seconds` says how old the values are. `plant_state` offline "
+            "is normal at night for plants without a battery.",
+            PropertyList(), [this](const PropertyList&) -> ReturnValue {
+                return SolisStatusToJson();
+            });
+        mcp_server.AddTool(
+            "self.solis.forget_key",
+            "Erases the SolisCloud API key from this device, which stops the solar monitoring "
+            "until a new key is entered on the device's setup web page. Only use it when the "
+            "user explicitly asks to remove or replace the key, and confirm with them first.",
+            PropertyList(), [this](const PropertyList&) -> ReturnValue {
+                solis_monitor_.ForgetCredentials();
+                return true;
+            });
+
+        solis_page_ = new SolisPage(display_);
+        solis_setup_ = new SolisSetupServer(&solis_monitor_);
+        solis_monitor_.Start([this](const SolisStatus& status) { OnSolisTick(status); },
+                             [this]() { OnSolisAlarm(); });
+    }
+
     static constexpr gpio_num_t PANEL_PINS[] = {
         DISPLAY_SPI_CS_PIN, DISPLAY_SPI_SCK_PIN, DISPLAY_SPI_MOSI_PIN,
         DISPLAY_DC_PIN, DISPLAY_BACKLIGHT_PIN,
@@ -1132,6 +1279,7 @@ public:
         InitializeButtons();
         GetBacklight()->RestoreBrightness();
         InitializePowerSaveTimer();
+        InitializeSolisMonitor();
     }
 
     virtual AudioCodec* GetAudioCodec() override {

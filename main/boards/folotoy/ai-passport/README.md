@@ -274,3 +274,7 @@ move the three deadlines off the `skip_unhandled_events` timer first.
   so that one shifts too (`kEs8311I2cAddress`). Using the unshifted address talks to
   nothing: measured on hardware, every register readback returned `0xF0` and both
   suspend attempts failed.
+
+## Solis inverter monitor
+
+See [SOLIS.md](SOLIS.md) (Swedish) for the SolisCloud monitor.

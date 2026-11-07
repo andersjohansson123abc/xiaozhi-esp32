@@ -1225,6 +1225,31 @@ menu "Camera Configuration"
     endif
 endmenu
 
+menu "SolisCloud Monitor"
+    depends on BOARD_TYPE_FOLOTOY_AI_PASSPORT
+
+    config SOLIS_MONITOR_API_URL
+        string "SolisCloud API base URL"
+        default "https://www.soliscloud.com:13333"
+
+    config SOLIS_MONITOR_POLL_SECONDS
+        int "Seconds between fetches"
+        range 120 3600
+        default 300
+        help
+            SolisCloud refreshes device data every five minutes, so fetching more
+            often only costs heap on this board.
+
+    config SOLIS_MONITOR_KEEP_AWAKE
+        bool "Stay awake while an API key is stored"
+        default y
+        help
+            Skips the soft-sleep and deep-sleep stages, so the screen dims but the
+            monitor keeps running. The board cannot detect a charger: keep it on
+            USB power, or the 520 mAh cell lasts a matter of hours. Turned off,
+            monitoring stops when the board reaches deep sleep.
+endmenu
+
 menu "TAIJIPAI_S3_CONFIG"
     depends on BOARD_TYPE_TAIJI_PI_S3
     choice I2S_TYPE_TAIJIPI_S3
