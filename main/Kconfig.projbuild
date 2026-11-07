@@ -1250,6 +1250,25 @@ menu "SolisCloud Monitor"
             monitoring stops when the board reaches deep sleep.
 endmenu
 
+menu "Grok Bot Monitor"
+    depends on BOARD_TYPE_FOLOTOY_AI_PASSPORT
+
+    config GROK_MONITOR
+        bool "Follow and message the owner's Grok Bots"
+        default n
+        help
+            Needs the relay in scripts/grok-relay. Off on the customer build: on, the
+            setup page stays open on the local network until a relay is stored.
+
+    config GROK_MONITOR_POLL_SECONDS
+        int "Seconds between polls of the relay"
+        range 15 600
+        default 30
+        help
+            Every poll is a TLS handshake, and a reply is at most this late. While a
+            relay is stored the board stays awake: keep it on USB power.
+endmenu
+
 menu "TAIJIPAI_S3_CONFIG"
     depends on BOARD_TYPE_TAIJI_PI_S3
     choice I2S_TYPE_TAIJIPI_S3

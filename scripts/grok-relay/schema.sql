@@ -1,0 +1,25 @@
+CREATE TABLE IF NOT EXISTS bots (
+  id TEXT PRIMARY KEY,
+  state TEXT NOT NULL DEFAULT 'idle',
+  note TEXT NOT NULL DEFAULT '',
+  reported_at INTEGER,
+  sent_at INTEGER,
+  replied_at INTEGER,
+  send_failed INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  bot_id TEXT NOT NULL,
+  text TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  read_at INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS messages_unread ON messages (id) WHERE read_at IS NULL;
+
+CREATE TABLE IF NOT EXISTS sends (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  bot_id TEXT NOT NULL,
+  at INTEGER NOT NULL
+);

@@ -1,0 +1,17 @@
+name = "passport-grok-relay"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "passport-grok"
+database_id = "ERSATT_MED_ID_FRAN_WRANGLER"
+
+[vars]
+# Seconds without an answer before a messaged Bot shows as "Svarar inte".
+NO_REPLY_SECONDS = "900"
+# Seconds before a Bot stuck in working or waiting shows as "Tyst".
+STALE_SECONDS = "7200"
+MAX_SENDS_PER_HOUR = "30"
+
+# Set with `wrangler secret put`, never here: DEVICE_TOKEN, BOT_TOKEN, BOTS.

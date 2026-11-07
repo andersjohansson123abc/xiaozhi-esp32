@@ -83,6 +83,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      # Static asserts, so compiling them is running them.
+      - name: Run the Passport's compile-time tests
+        if: ${{ matrix.board == 'folotoy/ai-passport' }}
+        shell: bash
+        working-directory: main/boards/folotoy/ai-passport/test
+        run: |
+          source "$IDF_PATH/export.sh"
+          for test in *_test.cc; do
+            riscv32-esp-elf-g++ -std=gnu++23 -fconstexpr-ops-limit=200000000 \
+              -fconstexpr-loop-limit=1000000 -fsyntax-only -I .. "$test"
+          done
+
       - name: Build current variant
         shell: bash
         env:

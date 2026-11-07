@@ -2,6 +2,7 @@
 
 #include "application.h"
 #include "board.h"
+#include "passport_tls_gate.h"
 #include "settings.h"
 #include "soliscloud_crypto.h"
 
@@ -183,6 +184,7 @@ void SolisMonitor::FetchEntry(void* arg) {
     ESP_LOGI(TAG, "Fetch done, %u bytes of stack to spare, lowest free heap %u",
              static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)),
              static_cast<unsigned>(heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL)));
+    ReleaseTlsTurn();
     monitor->fetching_ = false;
     vTaskDelete(nullptr);
 }
@@ -212,12 +214,13 @@ bool SolisMonitor::CanFetchNow() const {
 void SolisMonitor::Run() {
     while (true) {
         const bool due = fetch_now_ || esp_timer_get_time() >= next_fetch_us_;
-        if (due && !fetching_ && IsConfigured() && CanFetchNow()) {
+        if (due && !fetching_ && IsConfigured() && CanFetchNow() && TryTakeTlsTurn()) {
             fetch_now_ = false;
             fetching_ = true;
             if (xTaskCreate(FetchEntry, "solis_fetch", kFetchStackBytes, this, kTaskPriority,
                             nullptr) != pdPASS) {
                 fetching_ = false;
+                ReleaseTlsTurn();
                 ESP_LOGW(TAG, "No memory for the fetch task");
                 next_fetch_us_ = esp_timer_get_time() + kRetryUs;
             }
