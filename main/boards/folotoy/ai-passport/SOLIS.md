@@ -98,7 +98,11 @@ timmar, så **låt Passet sitta på USB**.
 
 `test/soliscloud_test.cc` körs av kompilatorn och täcker MD5, SHA-1, HMAC och Base64
 mot RFC-vektorer, Solis publicerade `Content-MD5`-exempel, signaturen, JSON-läsning
-vid godtyckliga chunkgränser, felsvar och formulärtolkning.
+vid godtyckliga chunkgränser, felsvar och formulärtolkning. Kör den från mappen `test`:
+
+```bash
+riscv32-esp-elf-g++ -std=gnu++23 -fconstexpr-ops-limit=200000000 -fconstexpr-loop-limit=1000000 -fsyntax-only -I .. soliscloud_test.cc
+```
 
 Ännu inte verifierat:
 

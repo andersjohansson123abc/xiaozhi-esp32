@@ -1,6 +1,6 @@
 // Compile-time tests. The compiler evaluates every check, so this runs with only
 // the cross compiler and no hardware:
-//   riscv32-esp-elf-g++ -std=gnu++23 -fconstexpr-ops-limit=100000000 -fsyntax-only -I .. soliscloud_test.cc
+//   riscv32-esp-elf-g++ -std=gnu++23 -fconstexpr-ops-limit=200000000 \n//       -fconstexpr-loop-limit=1000000 -fsyntax-only -I .. soliscloud_test.cc
 #include "soliscloud_crypto.h"
 #include "soliscloud_protocol.h"
 
