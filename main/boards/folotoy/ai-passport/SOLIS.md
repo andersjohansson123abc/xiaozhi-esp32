@@ -47,8 +47,10 @@ python scripts/build.py folotoy/ai-passport --name ai-passport --language sv-SE
 ```
 
 Med en fork på GitHub bygger Actions kortet vid push till `main` eller `ci/*` när en
-fil i kortets mapp ändrats, och firmwaren hamnar som artefakt på körningen. Den byggs
-med engelska systemtexter. Övervakningssidan är svensk i båda fallen.
+fil i kortets mapp ändrats, och firmwaren hamnar som artefakt på körningen. Forkens
+`.github/workflows/build.yml` lägger till `--language sv-SE` för kortet, så den får
+svenska systemtexter. En ändring i den filen bygger även projektets representativa
+kort en gång.
 
 Inställningar finns under **Xiaozhi Assistant → SolisCloud Monitor** i
 `idf.py menuconfig`. Nycklar läggs aldrig där, eftersom de då hamnar i firmwaren.

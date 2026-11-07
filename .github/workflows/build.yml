@@ -95,6 +95,10 @@ jobs:
           if [[ "$BUILD_OPTIONS_JSON" != "null" && -n "$BUILD_OPTIONS_JSON" ]]; then
             OPTIONS+=(--build-options-json "$BUILD_OPTIONS_JSON")
           fi
+          # This fork ships the Passport to Swedish customers.
+          if [[ "$BOARD" == "folotoy/ai-passport" ]]; then
+            OPTIONS+=(--language sv-SE)
+          fi
           python scripts/build.py "$BOARD" --name "$VARIANT" "${OPTIONS[@]}"
 
       - name: Upload artifacts
